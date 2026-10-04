@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuoDev Studio | Antigravity ✕ Codex Collaborative AI Team</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              agy: '#3b82f6',
+              codex: '#10b981',
+              dark: '#0b0f19',
+              card: '#131b2e',
+              border: '#1f293d'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800/80 bg-[#0c1322]/90 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-emerald-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-lg text-white tracking-tight">DuoDev Studio</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono border border-slate-700">v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">Antigravity (Google) ✕ Codex (OpenAI) 협업 개발 스튜디오</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT STATUS PILLS -->
+    <div class="hidden md:flex items-center gap-4 text-xs font-medium">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-950/60 border border-blue-800/50 text-blue-200">
+        <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+        <span class="font-semibold">Antigravity:</span>
+        <span id="status-agy" class="text-blue-300">대기 중 (CLI 연동)</span>
+      </div>
+
+      <div class="text-slate-500 font-bold">✕</div>
+
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/50 text-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-semibold">Codex:</span>
+        <span id="status-codex" class="text-emerald-300">대기 중 (CLI 연동)</span>
+      </div>
+    </div>
+
+    <!-- HEADER RIGHT CONTROLS -->
+    <div class="flex items-center gap-3">
+      <div id="connection-status" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400 flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span>SSE 연결됨</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- PROGRESS STEP BAR -->
+  <div class="bg-[#0d1424] border-b border-slate-800 px-6 py-2.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between text-xs text-slate-400">
+      <div class="flex items-center gap-2 md:gap-3 overflow-x-auto py-1" id="phase-steps">
+        <span class="step-item active" data-phase="planning">
+          <span class="step-num">1</span> 아키텍처 초안
+        </span>
+        <span class="text-slate-600">→</span>
+        <span class="step-item" data-phase="debating">
+          <span class="step-num">2</span> 교차 비판 & 합의
+        </span>
+        <span class="text-slate-600">→</span>
+        <span class="step-item" data-phase="coding">
+          <span class="step-num">3</span> 역할 분담 개발
+        </span>
+        <span class="text-slate-600">→</span>
+        <span class="step-item" data-phase="reviewing">
+          <span class="step-num">4</span> 상호 코드 리뷰
+        </span>
+        <span class="text-slate-600">→</span>
+        <span class="step-item" data-phase="completed">
+          <span class="step-num">5</span> 통합 완성
+        </span>
+      </div>
+      <div class="hidden sm:flex items-center gap-2 text-xs">
+        <span class="text-slate-500">진행도:</span>
+        <div class="w-24 bg-slate-800 rounded-full h-2 overflow-hidden">
+          <div id="progress-bar-fill" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <span id="progress-percent" class="font-mono text-slate-300">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN SPLIT LAYOUT -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
+    
+    <!-- LEFT COLUMN: PROMPT INPUT & COLLABORATION STREAM (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-4 h-[calc(100vh-140px)] min-h-[600px]">
+      
+      <!-- PROMPT & CONFIG CARD -->
+      <div class="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <span class="text-blue-400">●</span> 어떤 프로젝트를 두 AI에게 맡길까요?
+          </label>
+          <div class="flex items-center gap-2">
+            <!-- MODE SELECT -->
+            <select id="sprint-mode" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-slate-300 focus:outline-none focus:border-blue-500">
+              <option value="full">전체 스프린트 (기획+개발+리뷰)</option>
+              <option value="debate_only">설계 배틀만 (RFC 문서 도출)</option>
+            </select>
+            <!-- RUN ENGINE SELECT -->
+            <select id="run-mode" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-slate-300 focus:outline-none focus:border-emerald-500">
+              <option value="cli">⚡ 실시간 CLI 실행 (실제 agy & codex)</option>
+              <option value="sim">🚀 빠른 시뮬레이션 데모 (15초)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="relative">
+          <textarea id="prompt-input" rows="3" 
+            placeholder="예: WebSocket 기반 실시간 채팅 서버 및 프론트엔드 UI를 Node.js로 작성해줘. 동시 접속자 처리와 단위 테스트 포함."
+            class="w-full bg-[#0a0f1d] border border-slate-700/80 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all resize-none"></textarea>
+        </div>
+
+        <!-- QUICK PRESET CHIPS -->
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span class="text-slate-500">추천 예시:</span>
+          <button class="preset-btn" data-preset="WebSocket 기반 실시간 채팅 서버 및 프론트엔드 클라이언트 웹앱 구현 (접속자 목록 + 메시지 브로드캐스트 + 테스트코드)">
+            💬 실시간 채팅 웹앱
+          </button>
+          <button class="preset-btn" data-preset="Python FastAPI 기반 JWT 사용자 인증 + SQLite Todo CRUD API 및 Pytest 단위 테스트">
+            🛡️ FastAPI + JWT API
+          </button>
+          <button class="preset-btn" data-preset="Markdown 실시간 렌더링 메모장 웹 애플리케이션 (로컬스토리지 저장 + 태그 필터링 + 검색)">
+            📝 마크다운 메모 웹앱
+          </button>
+          <button class="preset-btn" data-preset="CSV 데이터 파서 및 요약 통계 계산 모듈 + 브라우저 차트 시각화 UI">
+            📊 데이터 통계 대시보드
+          </button>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+          <div class="text-xs text-slate-400 flex items-center gap-1.5" id="project-meta-info">
+            <span>폴더:</span>
+            <span class="font-mono text-slate-300" id="current-folder-label">프로젝트 미생성</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-abort" class="hidden px-3.5 py-1.5 rounded-xl border border-red-800 bg-red-950/40 text-red-300 hover:bg-red-900/60 text-xs font-semibold transition">
+              ⏹ 중단
+            </button>
+            <button id="btn-start" class="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-blue-500/25 transition flex items-center gap-2 active:scale-95">
+              <span>🚀 팀 작업 시작</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLLABORATION & DEBATE FEED -->
+      <div class="flex-1 bg-[#111827] border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl">
+        <div class="px-4 py-3 border-b border-slate-800 bg-[#0e1424] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-slate-200">🗣️ 실시간 협업 & 토론 피드</span>
+            <span id="message-count" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">0 건</span>
+          </div>
+          <div class="text-xs text-slate-400 flex items-center gap-3">
+            <span class="flex items-center gap-1.5 text-blue-400">
+              <span class="w-2 h-2 rounded-full bg-blue-500"></span> Antigravity
+            </span>
+            <span class="flex items-center gap-1.5 text-emerald-400">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Codex
+            </span>
+          </div>
+        </div>
+
+        <!-- MESSAGES CONTAINER -->
+        <div id="messages-container" class="flex-1 p-4 overflow-y-auto space-y-4">
+          <!-- Empty State -->
+          <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500">
+            <div class="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-2xl mb-3">
+              🤝
+            </div>
+            <h3 class="text-slate-300 font-semibold mb-1">두 AI 팀이 준비되어 있습니다</h3>
+            <p class="text-xs max-w-sm">상단에 개발하고 싶은 프로젝트 프롬프트를 입력하고 '팀 작업 시작'을 누르면, Antigravity와 Codex가 토론하며 분담 개발을 시작합니다.</p>
+          </div>
+        </div>
+
+        <!-- TYPING INDICATOR -->
+        <div id="typing-indicator" class="hidden px-4 py-2 bg-[#0e1424] border-t border-slate-800/80 text-xs flex items-center gap-2 text-slate-400">
+          <div class="flex gap-1">
+            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+          </div>
+          <span id="typing-label">Antigravity가 생각 중입니다...</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: WORKSPACE, KANBAN, FILES & LOGS (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col h-[calc(100vh-140px)] min-h-[600px] bg-[#111827] border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      
+      <!-- TABS HEADER -->
+      <div class="px-3 pt-3 border-b border-slate-800 bg-[#0e1424] flex items-center gap-2">
+        <button class="tab-btn active" data-tab="tab-kanban">
+          📋 태스크 보드 (<span id="task-count">0</span>)
+        </button>
+        <button class="tab-btn" data-tab="tab-files">
+          📁 생성 파일 (<span id="file-count">0</span>)
+        </button>
+        <button class="tab-btn" data-tab="tab-logs">
+          💻 실행 터미널
+        </button>
+      </div>
+
+      <!-- TAB 1: KANBAN BOARD -->
+      <div id="tab-kanban" class="tab-pane active flex-1 p-3 overflow-y-auto flex flex-col gap-3">
+        <div class="text-xs text-slate-400 flex items-center justify-between px-1">
+          <span>두 AI가 합의하여 분담한 세부 업무 목록입니다.</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="kanban-cards-container">
+          <div class="col-span-2 text-center py-12 text-slate-500 text-xs">
+            스프린트가 시작되면 기획 토론 후 자동으로 업무가 분담됩니다.
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: FILES & CODE VIEWER -->
+      <div id="tab-files" class="tab-pane hidden flex-1 flex flex-col overflow-hidden">
+        <div class="p-2 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs">
+          <span class="text-slate-400" id="current-file-label">파일을 선택하여 코드를 열람하세요</span>
+          <button id="btn-copy-code" class="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs">
+            코드 복사
+          </button>
+        </div>
+
+        <div class="flex-1 grid grid-cols-12 overflow-hidden">
+          <!-- File Tree (4 cols) -->
+          <div class="col-span-4 border-r border-slate-800 p-2 overflow-y-auto bg-[#0a0f1d] text-xs font-mono" id="file-tree-container">
+            <div class="text-slate-500 p-2">생성된 파일 없음</div>
+          </div>
+          <!-- Code Preview (8 cols) -->
+          <div class="col-span-8 p-3 overflow-auto bg-[#070b14] text-xs font-mono leading-relaxed" id="code-viewer-container">
+            <pre><code id="code-block" class="language-plaintext">// 파일 내용을 선택하면 여기에 표시됩니다.</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: TERMINAL LOGS -->
+      <div id="tab-logs" class="tab-pane hidden flex-1 flex flex-col overflow-hidden bg-[#070b12]">
+        <div class="p-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-mono">agy & codex stdout/stderr stream</span>
+          <button id="btn-clear-logs" class="text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs">
+            로그 지우기
+          </button>
+        </div>
+        <div id="terminal-logs-container" class="flex-1 p-3 overflow-y-auto font-mono text-xs text-slate-300 space-y-1">
+          <div class="text-slate-600">// 터미널 로그 스트림 대기 중...</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
