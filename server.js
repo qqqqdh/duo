@@ -1,5 +1,8 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const localEnv = path.join(__dirname, '.env');
+if (fs.existsSync(localEnv)) process.loadEnvFile(localEnv);
 const orchestrator = require('./lib/orchestrator');
 const projectManager = require('./lib/projectManager');
 const { decodePdfUploads } = require('./lib/pdfUploads');

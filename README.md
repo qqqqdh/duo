@@ -22,6 +22,8 @@ npm start
 
 실제 에이전트를 실행하려면 Antigravity CLI(`agy`)와 `codex`가 필요합니다. Windows에서는 PATH에 등록된 `agy.exe`와 `%LOCALAPPDATA%\agy\bin\agy.exe`를 자동으로 찾습니다. 다른 경로에 설치했다면 `AGY_BIN` 환경 변수로 지정하세요. `agy`가 없고 [Gemini CLI](https://github.com/google-gemini/gemini-cli)가 설치되어 있다면 Gemini CLI를 사용합니다. Codex는 PATH의 `codex.exe` 또는 npm 설치본을 자동으로 찾으며, 다른 경로는 `CODEX_BIN`으로 지정할 수 있습니다. CLI 설치나 환경 변수 변경 후에는 서버를 다시 시작하세요. CLI가 없다면 화면에서 **빠른 시뮬레이션 데모**를 선택하세요.
 
+Codex 사용량 한도로 CLI가 실패했을 때 FactChat의 ChatGPT 모델로 이어서 실행하려면 저장소 루트의 Git 제외 파일 `.env`에 `BAZE_API_KEY=발급받은_키`를 넣고 서버를 다시 시작하세요. 기본 대체 모델은 `gpt-5.6-terra`이며 `BAZE_MODEL` 환경 변수로 바꿀 수 있습니다. 스튜디오는 사용량 제한 오류에서만 같은 프롬프트와 같은 프로젝트 폴더로 한 번 재실행합니다. FactChat 연결 오류나 키 오류가 나면 해당 스프린트가 실패하며, FactChat 사용량은 키를 발급한 계정에 청구됩니다. [FactChat Codex 설정 안내](https://docs.factchat.kr/agent-setup/prompt.md)
+
 ```bash
 npm test
 ```
@@ -55,7 +57,7 @@ npm test
 
 ## 실행 오류 확인
 
-`codex exec`은 비대화형 명령이며 이 앱은 프롬프트를 stdin으로 전달한 뒤 즉시 닫습니다. 긴 설계안도 Windows 명령줄 길이 제한에 걸리지 않습니다. 로그의 `Reading additional input from stdin...` 한 줄만으로 입력 대기나 타임아웃을 원인으로 판단할 수 없습니다. CLI가 실행 후 비정상 종료하면 오류 메시지에 종료 코드 또는 신호와 실행 시간이 표시됩니다. 실패한 스프린트의 자동 재시도는 없으며 새 실행은 사용자가 시작합니다.
+`codex exec`은 비대화형 명령이며 이 앱은 프롬프트를 stdin으로 전달한 뒤 즉시 닫습니다. 긴 설계안도 Windows 명령줄 길이 제한에 걸리지 않습니다. 로그의 `Reading additional input from stdin...` 한 줄만으로 입력 대기나 타임아웃을 원인으로 판단할 수 없습니다. CLI가 실행 후 비정상 종료하면 오류 메시지에 종료 코드 또는 신호와 실행 시간이 표시됩니다. FactChat 키가 설정되어 있고 Codex 사용량 제한 오류가 발생한 경우에만 한 번 자동 재시도합니다.
 
 ## 구성
 

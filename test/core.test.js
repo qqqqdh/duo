@@ -60,6 +60,27 @@ test('Codex receives stdin EOF and failures report the exit reason', async (t) =
   );
 });
 
+test('Codex usage limit retries once through FactChat in the same directory', async (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-factchat-'));
+  const previousBin = agentRunner.codexBin;
+  const previousKey = process.env.BAZE_API_KEY;
+  agentRunner.codexBin = process.execPath;
+  process.env.BAZE_API_KEY = 'test-key';
+  fs.writeFileSync(path.join(base, 'exec'), "let input = ''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => { if (!process.argv.includes('model_provider=factchat')) { console.error('You have hit your usage limit'); process.exit(1); } if (!process.argv.includes('model_providers.factchat.env_key=BAZE_API_KEY') || input !== 'continue work') process.exit(2); console.log('codex\\ncontinued in ' + process.cwd()); });");
+  t.after(() => {
+    agentRunner.codexBin = previousBin;
+    if (previousKey === undefined) delete process.env.BAZE_API_KEY;
+    else process.env.BAZE_API_KEY = previousKey;
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  const logs = [];
+  const result = await agentRunner.runCodex({ prompt: 'continue work', projectDir: base, onLog: log => logs.push(log), signal: AbortSignal.timeout(5000) });
+  assert.match(result.output, /continued in/);
+  assert.ok(logs.some(log => log.message?.includes('FactChat')));
+  assert.equal(agentRunner.isCodexUsageLimit(new Error('context window limit exceeded')), false);
+});
+
 test('Windows Gemini npm installation runs through Node without a shell', { skip: process.platform !== 'win32' }, (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-gemini-'));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));

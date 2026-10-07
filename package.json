@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test test/core.test.js test/pdf.test.js test/server.test.js"
   },
   "keywords": [],
   "author": "",
