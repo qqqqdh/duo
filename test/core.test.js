@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const projectManager = require('../lib/projectManager');
 const orchestrator = require('../lib/orchestrator');
+const agentRunner = require('../lib/agentRunner');
 
 test('file reads stay inside the project', (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-files-'));
@@ -41,4 +42,20 @@ test('an aborted sprint cannot overlap another sprint', async (t) => {
   await first;
   assert.equal(orchestrator.currentSession.status, 'aborted');
   assert.equal(orchestrator.isRunning, false);
+});
+
+test('Codex receives stdin EOF and failures report the exit reason', async (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-cli-'));
+  const previousBin = agentRunner.codexBin;
+  agentRunner.codexBin = process.execPath;
+  fs.writeFileSync(path.join(base, 'exec'), "process.stdin.resume(); process.stdin.on('end', () => { console.error('stdin closed'); process.exit(1); });");
+  t.after(() => {
+    agentRunner.codexBin = previousBin;
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  await assert.rejects(
+    agentRunner.runCodex({ prompt: 'test', projectDir: base, signal: AbortSignal.timeout(3000) }),
+    /Codex exited with code 1 after \d+s: stdin closed/
+  );
 });
