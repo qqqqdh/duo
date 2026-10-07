@@ -8,6 +8,7 @@ let selectedFile = null;
 
 // DOM Elements
 const promptInput = document.getElementById('prompt-input');
+const pdfInput = document.getElementById('pdf-input');
 const sprintMode = document.getElementById('sprint-mode');
 const runMode = document.getElementById('run-mode');
 const btnStart = document.getElementById('btn-start');
@@ -155,7 +156,11 @@ function updateSession(session) {
   });
 
   // Agents status pills
-  if (session.status === 'planning') {
+  if (session.status === 'reading_pdf') {
+    statusAgy.textContent = 'PDF 준비 중';
+    statusCodex.textContent = 'PDF 준비 중';
+    showTyping('업로드한 PDF에서 텍스트를 추출하고 있습니다...');
+  } else if (session.status === 'planning') {
     statusAgy.textContent = '아키텍처 설계 중...';
     statusCodex.textContent = '대기 중';
     showTyping('Antigravity (Google) 가 아키텍처 초안을 설계 중입니다...');
@@ -379,6 +384,11 @@ window.loadFile = async function(relativePath) {
     el.classList.toggle('selected', el.dataset.path === relativePath);
   });
 
+  if (/\.pdf$/i.test(relativePath)) {
+    codeBlock.textContent = 'PDF 원본 파일입니다. 같은 폴더의 .txt 파일에서 두 에이전트가 읽는 추출 텍스트를 확인하세요.';
+    return;
+  }
+
   try {
     const res = await fetch(`/api/file?path=${encodeURIComponent(relativePath)}`);
     const data = await res.json();
@@ -439,6 +449,16 @@ btnStart.addEventListener('click', async () => {
     promptInput.focus();
     return;
   }
+  const files = [...pdfInput.files];
+  if (files.length > 3 || files.some(file => !/\.pdf$/i.test(file.name) || file.size > 10 * 1024 * 1024) ||
+      files.reduce((total, file) => total + file.size, 0) > 20 * 1024 * 1024) {
+    alert('PDF는 최대 3개, 각 10MB, 전체 20MB까지 선택할 수 있습니다.');
+    return;
+  }
+  if (files.length && runMode.value === 'sim') {
+    alert('PDF 분석은 실제 CLI 실행 모드에서만 지원합니다.');
+    return;
+  }
 
   btnStart.classList.add('hidden');
   btnAbort.classList.remove('hidden');
@@ -449,6 +469,12 @@ btnStart.addEventListener('click', async () => {
   messages = [];
 
   try {
+    const pdfs = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name, data: String(reader.result).split(',')[1] });
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    })));
     const res = await fetch('/api/sprint/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -456,7 +482,8 @@ btnStart.addEventListener('click', async () => {
         prompt,
         projectName: 'duo_' + Date.now().toString().slice(-4),
         mode: sprintMode.value,
-        runMode: runMode.value
+        runMode: runMode.value,
+        pdfs
       })
     });
     const result = await res.json();

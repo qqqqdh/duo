@@ -3,12 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const orchestrator = require('./lib/orchestrator');
 const projectManager = require('./lib/projectManager');
+const { decodePdfUploads } = require('./lib/pdfUploads');
 
 const app = express();
 const PORT = process.env.PORT || 3300;
 const HOST = process.env.HOST || '127.0.0.1';
 
-app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', (req, res, next) => {
   const origin = req.get('origin');
@@ -66,7 +66,7 @@ app.get('/api/state', (req, res) => {
 });
 
 // API: Start sprint
-app.post('/api/sprint/start', (req, res) => {
+app.post('/api/sprint/start', express.json({ limit: '28mb' }), (req, res) => {
   const { prompt, projectName, mode, runMode } = req.body || {};
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: '프롬프트를 입력해주세요.' });
@@ -80,13 +80,23 @@ app.post('/api/sprint/start', (req, res) => {
   if (runMode && !['cli', 'sim'].includes(runMode)) {
     return res.status(400).json({ error: '지원하지 않는 실행 모드입니다.' });
   }
+  let pdfs;
+  try {
+    pdfs = decodePdfUploads(req.body.pdfs);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (pdfs.length && runMode === 'sim') {
+    return res.status(400).json({ error: 'PDF 분석은 실제 CLI 실행 모드에서만 지원합니다.' });
+  }
 
   // Trigger sprint in background
   orchestrator.startSprint({
     prompt: prompt.trim(),
     projectName: typeof projectName === 'string' ? projectName : 'duo_app',
     mode: mode || 'full',
-    runMode: runMode || 'cli'
+    runMode: runMode || 'cli',
+    pdfs
   });
 
   res.json({ success: true, message: '스프린트가 시작되었습니다.' });
@@ -133,6 +143,13 @@ app.get('/api/projects', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'PDF 업로드 크기가 제한을 초과했습니다.' });
+  }
+  next(err);
 });
 
 if (require.main === module) {

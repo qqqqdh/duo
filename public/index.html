@@ -143,6 +143,11 @@
             class="w-full bg-[#0a0f1d] border border-slate-700/80 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all resize-none"></textarea>
         </div>
 
+        <label class="text-xs text-slate-300" for="pdf-input">참고 PDF (선택, 텍스트 PDF 최대 3개)</label>
+        <input id="pdf-input" type="file" accept=".pdf,application/pdf" multiple
+          class="text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-1 file:text-slate-100">
+        <p class="text-[11px] text-slate-500">각 10MB, 전체 20MB, 문서당 100페이지까지. 실제 CLI 모드에서 두 에이전트가 추출된 텍스트를 읽습니다. 스캔 이미지 PDF는 지원하지 않습니다.</p>
+
         <!-- QUICK PRESET CHIPS -->
         <div class="flex flex-wrap items-center gap-2 text-xs">
           <span class="text-slate-500">추천 예시:</span>

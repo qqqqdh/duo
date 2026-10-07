@@ -21,4 +21,20 @@ test('the local API rejects cross-origin and invalid sprint requests', async (t)
     body: JSON.stringify({ prompt: {}, runMode: 'sim' })
   });
   assert.equal(invalid.status, 400);
+
+  const invalidPdf = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt: 'Read this PDF', pdfs: [{ name: 'notes.pdf', data: Buffer.from('not a PDF').toString('base64') }] })
+  });
+  assert.equal(invalidPdf.status, 400);
+  assert.match((await invalidPdf.json()).error, /PDF 형식/);
+
+  const simulationPdf = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt: 'Read this PDF', runMode: 'sim', pdfs: [{ name: 'notes.pdf', data: Buffer.from('%PDF-1.4').toString('base64') }] })
+  });
+  assert.equal(simulationPdf.status, 400);
+  assert.match((await simulationPdf.json()).error, /실제 CLI/);
 });
