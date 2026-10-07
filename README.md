@@ -4,7 +4,14 @@
 
 ## 시작
 
-Node.js와 npm을 설치한 뒤 저장소에서 실행하세요.
+Node.js와 npm을 설치한 뒤 **`package.json`과 `package-lock.json`이 있는 저장소 폴더**로 먼저 이동하세요. Windows 명령 프롬프트에서는 아래 경로를 실제로 저장소를 복제한 위치로 바꿔 입력합니다.
+
+```bat
+cd /d "C:\path\to\duo"
+dir package.json package-lock.json
+```
+
+macOS/Linux에서는 `cd /path/to/duo`로 이동합니다. 두 파일이 보이면 다음 명령을 실행하세요.
 
 ```bash
 npm ci
