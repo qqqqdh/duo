@@ -71,3 +71,14 @@ test('Windows Gemini npm installation runs through Node without a shell', { skip
   assert.equal(command.bin, process.execPath);
   assert.deepEqual(command.prefix, [script]);
 });
+
+test('Antigravity CLI finds the Windows local installation and respects AGY_BIN', { skip: process.platform !== 'win32' }, (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-agy-'));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const bin = path.join(base, 'agy', 'bin', 'agy.exe');
+  fs.mkdirSync(path.dirname(bin), { recursive: true });
+  fs.writeFileSync(bin, 'fixture');
+
+  assert.equal(agentRunner.agyCommand({ PATH: '', LOCALAPPDATA: base }), bin);
+  assert.equal(agentRunner.agyCommand({ PATH: '', LOCALAPPDATA: base, AGY_BIN: 'custom-agy' }), 'custom-agy');
+});

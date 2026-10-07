@@ -1,6 +1,6 @@
 # DuoDev Studio
 
-Gemini CLI와 `codex exec`을 순서대로 실행하고 진행 상황을 브라우저에 보여주는 로컬 개발 도구입니다. Google 에이전트는 화면에서 Antigravity 역할로 표시됩니다. 한 번에 하나의 스프린트를 실행하며, 프로젝트마다 저장소의 `projects/` 아래에 새 작업 폴더를 만듭니다.
+Antigravity CLI와 `codex exec`을 순서대로 실행하고 진행 상황을 브라우저에 보여주는 로컬 개발 도구입니다. Antigravity CLI를 찾지 못하면 Gemini CLI를 대체 실행기로 사용합니다. 한 번에 하나의 스프린트를 실행하며, 프로젝트마다 저장소의 `projects/` 아래에 새 작업 폴더를 만듭니다.
 
 ## 시작
 
@@ -20,7 +20,7 @@ npm start
 
 브라우저에서 [http://127.0.0.1:3300](http://127.0.0.1:3300)을 엽니다. 서버는 기본적으로 로컬 주소에만 바인딩됩니다. 포트를 바꾸려면 `PORT` 환경 변수를 설정하세요. 서버에 사용자 인증은 없으므로 외부에 공개하지 마세요.
 
-실제 에이전트를 실행하려면 [Gemini CLI](https://github.com/google-gemini/gemini-cli)와 `codex` 명령이 PATH에 있어야 합니다. Gemini CLI는 `npm install -g @google/gemini-cli`로 설치할 수 있습니다. 별도의 `agy` 실행 파일이 있다면 `AGY_BIN` 환경 변수로 지정해 Gemini CLI 대신 사용할 수 있습니다. Codex 실행 파일은 `CODEX_BIN`으로 지정할 수 있습니다. CLI 설치 후에는 서버를 다시 시작하세요. CLI가 없다면 화면에서 **빠른 시뮬레이션 데모**를 선택하세요.
+실제 에이전트를 실행하려면 Antigravity CLI(`agy`)와 `codex`가 필요합니다. Windows에서는 PATH에 등록된 `agy.exe`와 `%LOCALAPPDATA%\agy\bin\agy.exe`를 자동으로 찾습니다. 다른 경로에 설치했다면 `AGY_BIN` 환경 변수로 지정하세요. `agy`가 없고 [Gemini CLI](https://github.com/google-gemini/gemini-cli)가 설치되어 있다면 Gemini CLI를 사용합니다. `CODEX_BIN`으로 Codex 경로를 지정할 수 있습니다. CLI 설치나 환경 변수 변경 후에는 서버를 다시 시작하세요. CLI가 없다면 화면에서 **빠른 시뮬레이션 데모**를 선택하세요.
 
 ```bash
 npm test
@@ -34,7 +34,7 @@ npm test
 | --- | --- |
 | 전체 스프린트 | Antigravity 설계 → Codex 설계 검토 → Antigravity 구현 → Codex 코드 검토 및 보완 |
 | 설계 배틀만 | 설계와 검토 결과를 대화 화면에 표시하고 구현 단계는 실행하지 않음 |
-| 실시간 CLI 실행 | 실제 `gemini` 및 `codex exec`을 호출하고 작업 폴더의 파일을 직접 변경. `AGY_BIN` 설정 시 `agy` 사용 |
+| 실시간 CLI 실행 | 실제 `agy` 및 `codex exec`을 호출하고 작업 폴더의 파일을 직접 변경. `agy`가 없으면 `gemini` 사용 |
 | 빠른 시뮬레이션 데모 | 예시 메시지와 작업 상태를 표시하고 예시 README만 생성. 실제 코드는 만들지 않음 |
 
 ### 참고 PDF 분석
@@ -45,7 +45,7 @@ npm test
 
 태스크 보드는 Antigravity 응답의 JSON 작업 목록을 읽습니다. 목록을 읽지 못하면 기본 작업 목록을 사용합니다. 실제 CLI 모드의 **완료** 상태는 실행한 CLI 명령이 정상 종료했다는 뜻이며, 생성 프로젝트의 테스트나 품질을 스튜디오가 자동으로 검증했다는 뜻은 아닙니다.
 
-실제 CLI 모드에서 Gemini CLI는 `--skip-trust --approval-mode yolo`로, `AGY_BIN`을 설정했다면 Antigravity는 `--dangerously-skip-permissions`로 실행됩니다. Codex는 `workspace-write` 샌드박스로 실행됩니다. 두 도구가 파일을 변경하므로 신뢰할 수 있는 요청을 입력하세요.
+실제 CLI 모드에서 Antigravity는 `--dangerously-skip-permissions`로 실행됩니다. 대체 실행기인 Gemini CLI는 `--skip-trust --approval-mode yolo`로 실행됩니다. Codex는 `workspace-write` 샌드박스로 실행됩니다. 두 도구가 파일을 변경하므로 신뢰할 수 있는 요청을 입력하세요.
 
 ## 실행 오류 확인
 
