@@ -59,3 +59,15 @@ test('Codex receives stdin EOF and failures report the exit reason', async (t) =
     /Codex exited with code 1 after \d+s: stdin closed/
   );
 });
+
+test('Windows Gemini npm installation runs through Node without a shell', { skip: process.platform !== 'win32' }, (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-gemini-'));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const script = path.join(base, 'node_modules', '@google', 'gemini-cli', 'bundle', 'gemini.js');
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.writeFileSync(script, "console.log('gemini fixture');");
+
+  const command = agentRunner.geminiCommand({ PATH: base });
+  assert.equal(command.bin, process.execPath);
+  assert.deepEqual(command.prefix, [script]);
+});
