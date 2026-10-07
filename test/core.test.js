@@ -48,7 +48,7 @@ test('Codex receives stdin EOF and failures report the exit reason', async (t) =
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-cli-'));
   const previousBin = agentRunner.codexBin;
   agentRunner.codexBin = process.execPath;
-  fs.writeFileSync(path.join(base, 'exec'), "process.stdin.resume(); process.stdin.on('end', () => { console.error('stdin closed'); process.exit(1); });");
+  fs.writeFileSync(path.join(base, 'exec'), "let input = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => { console.error('stdin closed: ' + input + ', arg: ' + process.argv.at(-1)); process.exit(1); });");
   t.after(() => {
     agentRunner.codexBin = previousBin;
     fs.rmSync(base, { recursive: true, force: true });
@@ -56,7 +56,7 @@ test('Codex receives stdin EOF and failures report the exit reason', async (t) =
 
   await assert.rejects(
     agentRunner.runCodex({ prompt: 'test', projectDir: base, signal: AbortSignal.timeout(3000) }),
-    /Codex exited with code 1 after \d+s: stdin closed/
+    /Codex exited with code 1 after \d+s: stdin closed: test, arg: -/
   );
 });
 
@@ -81,4 +81,17 @@ test('Antigravity CLI finds the Windows local installation and respects AGY_BIN'
 
   assert.equal(agentRunner.agyCommand({ PATH: '', LOCALAPPDATA: base }), bin);
   assert.equal(agentRunner.agyCommand({ PATH: '', LOCALAPPDATA: base, AGY_BIN: 'custom-agy' }), 'custom-agy');
+});
+
+test('Windows Codex npm installation runs through Node without a shell', { skip: process.platform !== 'win32' }, (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-codex-'));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const script = path.join(base, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.writeFileSync(script, "console.log('codex fixture');");
+
+  const command = agentRunner.codexCommand({ PATH: base });
+  assert.equal(command.bin, process.execPath);
+  assert.deepEqual(command.prefix, [script]);
+  assert.deepEqual(agentRunner.codexCommand({ PATH: base, CODEX_BIN: 'custom-codex' }), { bin: 'custom-codex', prefix: [] });
 });
