@@ -95,3 +95,44 @@ test('Windows Codex npm installation runs through Node without a shell', { skip:
   assert.deepEqual(command.prefix, [script]);
   assert.deepEqual(agentRunner.codexCommand({ PATH: base, CODEX_BIN: 'custom-codex' }), { bin: 'custom-codex', prefix: [] });
 });
+
+test('a saved project reopens and follow-up work uses the same directory', async (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'duo-followup-'));
+  const previousBase = projectManager.baseDir;
+  const previousAgy = agentRunner.runAntigravity;
+  const previousCodex = agentRunner.runCodex;
+  projectManager.baseDir = base;
+  const { folderName, projectPath } = projectManager.createProjectDir('existing');
+  fs.writeFileSync(path.join(projectPath, 'app.txt'), 'keep this file');
+  const prompts = [];
+  agentRunner.runAntigravity = async ({ prompt }) => { prompts.push(prompt); return { output: 'Antigravity plan and changes' }; };
+  agentRunner.runCodex = async ({ prompt }) => { prompts.push(prompt); return { output: 'Codex review and changes' }; };
+  t.after(() => {
+    agentRunner.runAntigravity = previousAgy;
+    agentRunner.runCodex = previousCodex;
+    projectManager.baseDir = previousBase;
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  assert.throws(() => projectManager.resolveProject('../outside'), /잘못된 프로젝트/);
+  const opened = orchestrator.openProject(folderName);
+  assert.equal(opened.session.projectPath, projectPath);
+  assert.ok(opened.fileTree.some(file => file.name === 'app.txt'));
+
+  await orchestrator.startSprint({ prompt: 'Add a feature', existingProjectName: folderName });
+  assert.equal(orchestrator.currentSession.status, 'completed');
+  assert.equal(orchestrator.currentSession.projectPath, projectPath);
+  assert.equal(fs.readdirSync(base).length, 1);
+  assert.equal(fs.readFileSync(path.join(projectPath, 'app.txt'), 'utf8'), 'keep this file');
+  assert.equal(prompts.length, 4);
+  assert.match(prompts[0], /Read its code and relevant references first/);
+  assert.match(prompts[2], /existing project directory/);
+  const saved = projectManager.loadSnapshot(projectPath);
+  assert.ok(saved.history.some(message => message.text.includes('후속 수정 요청')));
+  assert.ok(saved.logs.some(log => log.message?.includes('1단계')));
+  assert.equal(saved.session.status, 'completed');
+
+  orchestrator.clearProject();
+  assert.equal(orchestrator.openProject(folderName).session.projectPath, projectPath);
+  assert.ok(orchestrator.history.some(message => message.text.includes('후속 수정 요청')));
+});

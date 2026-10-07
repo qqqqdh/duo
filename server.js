@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const orchestrator = require('./lib/orchestrator');
 const projectManager = require('./lib/projectManager');
 const { decodePdfUploads } = require('./lib/pdfUploads');
@@ -40,6 +39,7 @@ orchestrator.on('task_update', (task) => broadcastSSE('task_update', task));
 orchestrator.on('tasks_init', (tasks) => broadcastSSE('tasks_init', tasks));
 orchestrator.on('files_changed', (files) => broadcastSSE('files_changed', files));
 orchestrator.on('status_change', (status) => broadcastSSE('status_change', status));
+orchestrator.on('state_reset', (state) => broadcastSSE('state_reset', state));
 
 // SSE Endpoint
 app.get('/api/events', (req, res) => {
@@ -126,23 +126,42 @@ app.get('/api/file', (req, res) => {
   }
 });
 
-// API: List past projects
+// API: List and reopen past projects
 app.get('/api/projects', (req, res) => {
   try {
-    const projectsDir = path.join(__dirname, 'projects');
-    if (!fs.existsSync(projectsDir)) return res.json([]);
-    const dirs = fs.readdirSync(projectsDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => ({
-        name: d.name,
-        path: path.join(projectsDir, d.name),
-        mtime: fs.statSync(path.join(projectsDir, d.name)).mtime
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
-    res.json(dirs);
+    res.json(projectManager.listProjects());
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/projects/:name/open', (req, res) => {
+  if (orchestrator.isRunning) return res.status(409).json({ error: '스프린트 실행 중에는 다른 프로젝트를 열 수 없습니다.' });
+  try {
+    res.json(orchestrator.openProject(req.params.name));
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.post('/api/projects/clear', (req, res) => {
+  if (orchestrator.isRunning) return res.status(409).json({ error: '스프린트 실행 중에는 새 프로젝트로 전환할 수 없습니다.' });
+  res.json(orchestrator.clearProject());
+});
+
+app.post('/api/projects/:name/continue', express.json({ limit: '64kb' }), (req, res) => {
+  if (orchestrator.isRunning) return res.status(409).json({ error: '이미 스프린트가 실행 중입니다.' });
+  const prompt = req.body?.prompt;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: '후속 요청을 입력해주세요.' });
+  }
+  try {
+    projectManager.resolveProject(req.params.name);
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+  orchestrator.startSprint({ prompt: prompt.trim(), existingProjectName: req.params.name });
+  res.json({ success: true, message: '기존 프로젝트에서 후속 작업을 시작했습니다.' });
 });
 
 app.use((err, req, res, next) => {
