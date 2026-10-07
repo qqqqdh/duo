@@ -93,8 +93,8 @@
 
 /* Chat bubble markdown formatting */
 .chat-markdown {
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-size: 0.9375rem;
+  line-height: 1.7;
 }
 .chat-markdown p {
   margin-bottom: 0.5rem;
@@ -108,9 +108,9 @@
   margin-top: 0.75rem;
   margin-bottom: 0.35rem;
 }
-.chat-markdown h1 { font-size: 1rem; }
-.chat-markdown h2 { font-size: 0.9rem; }
-.chat-markdown h3 { font-size: 0.85rem; }
+.chat-markdown h1 { font-size: 1.2rem; }
+.chat-markdown h2 { font-size: 1.1rem; }
+.chat-markdown h3 { font-size: 1rem; }
 .chat-markdown ul, .chat-markdown ol {
   padding-left: 1.25rem;
   margin-bottom: 0.5rem;
@@ -182,4 +182,11 @@
   background-color: #1e3a8a;
   color: #93c5fd;
   font-weight: 600;
+}
+
+#feed-panel.feed-expanded {
+  position: fixed;
+  inset: 1rem;
+  z-index: 60;
+  min-height: 0;
 }

@@ -5,9 +5,11 @@ let tasks = [];
 let messages = [];
 let files = [];
 let selectedFile = null;
+let activeProjectName = null;
 
 // DOM Elements
 const promptInput = document.getElementById('prompt-input');
+const pdfInput = document.getElementById('pdf-input');
 const sprintMode = document.getElementById('sprint-mode');
 const runMode = document.getElementById('run-mode');
 const btnStart = document.getElementById('btn-start');
@@ -31,6 +33,19 @@ const statusAgy = document.getElementById('status-agy');
 const statusCodex = document.getElementById('status-codex');
 const btnCopyCode = document.getElementById('btn-copy-code');
 const btnClearLogs = document.getElementById('btn-clear-logs');
+const projectSelect = document.getElementById('project-select');
+const btnOpenProject = document.getElementById('btn-open-project');
+const btnNewProject = document.getElementById('btn-new-project');
+const promptLabel = document.getElementById('prompt-label');
+const startLabel = document.getElementById('start-label');
+const activityPreview = document.getElementById('activity-preview');
+const feedPanel = document.getElementById('feed-panel');
+const btnExpandFeed = document.getElementById('btn-expand-feed');
+const escapeHTML = (value) => {
+  const span = document.createElement('span');
+  span.textContent = String(value ?? '');
+  return span.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+};
 
 // Preset buttons
 document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -38,6 +53,65 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
     promptInput.value = btn.getAttribute('data-preset');
     promptInput.focus();
   });
+});
+
+async function refreshProjects(selectedName = projectSelect.value) {
+  try {
+    const res = await fetch('/api/projects');
+    const projects = await res.json();
+    if (!res.ok) throw new Error(projects.error || '프로젝트 목록을 읽을 수 없습니다.');
+    projectSelect.replaceChildren(new Option('새 프로젝트', ''));
+    projects.forEach(project => {
+      const detail = project.prompt ? project.prompt.replace(/\s+/g, ' ').slice(0, 40) : new Date(project.mtime).toLocaleString();
+      projectSelect.add(new Option(`${project.name} · ${detail}`, project.name));
+    });
+    const wanted = activeProjectName || selectedName;
+    projectSelect.value = projects.some(project => project.name === wanted) ? wanted : '';
+    btnOpenProject.disabled = !projectSelect.value || Boolean(currentSession && !['loaded', 'completed', 'aborted', 'error'].includes(currentSession.status));
+  } catch (err) {
+    activityPreview.textContent = `프로젝트 목록 오류: ${err.message}`;
+  }
+}
+
+projectSelect.addEventListener('change', () => {
+  btnOpenProject.disabled = !projectSelect.value || Boolean(currentSession && !['loaded', 'completed', 'aborted', 'error'].includes(currentSession.status));
+});
+
+btnOpenProject.addEventListener('click', async () => {
+  if (!projectSelect.value) return;
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectSelect.value)}/open`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '프로젝트를 불러올 수 없습니다.');
+    promptInput.value = '';
+    pdfInput.value = '';
+    renderState(data);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+btnNewProject.addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/projects/clear', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '새 프로젝트로 전환할 수 없습니다.');
+    promptInput.value = '';
+    pdfInput.value = '';
+    renderState(data);
+    projectSelect.value = '';
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+btnExpandFeed.addEventListener('click', () => {
+  const expanded = feedPanel.classList.toggle('feed-expanded');
+  btnExpandFeed.textContent = expanded ? '⤢ 축소' : '⛶ 확대';
+  btnExpandFeed.setAttribute('aria-label', expanded ? '협업 피드 축소' : '협업 피드 확대');
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && feedPanel.classList.contains('feed-expanded')) btnExpandFeed.click();
 });
 
 // Tabs logic
@@ -57,20 +131,10 @@ function connectSSE() {
   const evtSource = new EventSource('/api/events');
 
   evtSource.addEventListener('init', (e) => {
-    const data = JSON.parse(e.data);
-    if (data.session) updateSession(data.session);
-    if (data.history && data.history.length > 0) {
-      data.history.forEach(m => addMessageToUI(m));
-    }
-    if (data.tasks) {
-      tasks = data.tasks;
-      renderKanban();
-    }
-    if (data.fileTree) {
-      files = data.fileTree;
-      renderFileTree(files);
-    }
+    renderState(JSON.parse(e.data));
   });
+
+  evtSource.addEventListener('state_reset', (e) => renderState(JSON.parse(e.data)));
 
   evtSource.addEventListener('message', (e) => {
     const msg = JSON.parse(e.data);
@@ -80,6 +144,7 @@ function connectSSE() {
   evtSource.addEventListener('status_change', (e) => {
     const session = JSON.parse(e.data);
     updateSession(session);
+    if (session.status === 'completed') refreshProjects(session.projectName);
   });
 
   evtSource.addEventListener('tasks_init', (e) => {
@@ -113,14 +178,63 @@ function connectSSE() {
   };
 }
 
+function renderState(data) {
+  messagesContainer.replaceChildren();
+  messages = [];
+  messageCount.textContent = '0 건';
+  if (!data.history?.length) {
+    emptyState.classList.remove('hidden');
+    messagesContainer.appendChild(emptyState);
+  }
+  terminalLogsContainer.replaceChildren();
+  activityPreview.textContent = '에이전트가 시작되면 진행 로그가 여기에 표시됩니다.';
+  (data.logs || []).forEach(appendLog);
+  updateSession(data.session || null);
+  (data.history || []).forEach(addMessageToUI);
+  tasks = data.tasks || [];
+  renderKanban();
+  files = data.fileTree || [];
+  renderFileTree(files);
+  refreshProjects(activeProjectName);
+}
+
 // Update Session & UI State
 function updateSession(session) {
+  if (currentSession?.id !== session?.id) {
+    selectedFile = null;
+    codeBlock.textContent = '// 파일 내용을 선택하면 여기에 표시됩니다.';
+    currentFileLabel.textContent = '파일을 선택하여 코드를 열람하세요';
+  }
   currentSession = session;
-  if (!session) return;
+  activeProjectName = session?.continuing ? session.projectName : null;
+  promptLabel.textContent = activeProjectName ? `${activeProjectName}에 어떤 수정을 요청할까요?` : '어떤 프로젝트를 두 AI에게 맡길까요?';
+  startLabel.textContent = activeProjectName ? '🛠️ 수정 요청 실행' : '🚀 팀 작업 시작';
+  if (activeProjectName) {
+    sprintMode.value = 'full';
+    runMode.value = 'cli';
+  }
+  pdfInput.disabled = Boolean(activeProjectName);
+  sprintMode.disabled = Boolean(activeProjectName);
+  runMode.disabled = Boolean(activeProjectName);
+  btnOpenProject.disabled = !projectSelect.value || Boolean(session && !['loaded', 'completed', 'aborted', 'error'].includes(session.status));
+  btnNewProject.disabled = Boolean(session && !['loaded', 'completed', 'aborted', 'error'].includes(session.status));
+  if (!session) {
+    currentFolderLabel.textContent = '프로젝트 미생성';
+    progressBarFill.style.width = '0%';
+    progressPercent.textContent = '0%';
+    statusAgy.textContent = '대기 중 (CLI 연동)';
+    statusCodex.textContent = '대기 중 (CLI 연동)';
+    btnStart.classList.remove('hidden');
+    btnAbort.classList.add('hidden');
+    hideTyping();
+    return;
+  }
 
   currentFolderLabel.textContent = session.projectName || '준비 완료';
   progressBarFill.style.width = `${session.progress || 0}%`;
   progressPercent.textContent = `${session.progress || 0}%`;
+  btnStart.classList.toggle('hidden', !['loaded', 'completed', 'aborted', 'error'].includes(session.status));
+  btnAbort.classList.toggle('hidden', ['loaded', 'completed', 'aborted', 'error'].includes(session.status));
 
   // Update step indicators
   const phaseOrder = ['planning', 'debating', 'coding', 'reviewing', 'completed'];
@@ -138,7 +252,11 @@ function updateSession(session) {
   });
 
   // Agents status pills
-  if (session.status === 'planning') {
+  if (session.status === 'reading_pdf') {
+    statusAgy.textContent = 'PDF 준비 중';
+    statusCodex.textContent = 'PDF 준비 중';
+    showTyping('업로드한 PDF에서 텍스트를 추출하고 있습니다...');
+  } else if (session.status === 'planning') {
     statusAgy.textContent = '아키텍처 설계 중...';
     statusCodex.textContent = '대기 중';
     showTyping('Antigravity (Google) 가 아키텍처 초안을 설계 중입니다...');
@@ -154,6 +272,10 @@ function updateSession(session) {
     statusAgy.textContent = '상호 검증 대기';
     statusCodex.textContent = '코드 교차 리뷰 & 보완 중...';
     showTyping('Codex가 코드를 교차 검증하고 단위 테스트 및 보완 로직을 작성 중입니다...');
+  } else if (session.status === 'loaded') {
+    statusAgy.textContent = '프로젝트 대기';
+    statusCodex.textContent = '프로젝트 대기';
+    hideTyping();
   } else if (session.status === 'completed') {
     statusAgy.textContent = '완료 (Idle)';
     statusCodex.textContent = '완료 (Idle)';
@@ -212,7 +334,7 @@ function addMessageToUI(msg) {
     avatarIcon = '⚡';
   }
 
-  const parsedMarkdown = marked.parse(msg.text || '');
+  const parsedMarkdown = DOMPurify.sanitize(marked.parse(msg.text || ''));
 
   msgDiv.innerHTML = `
     <div class="border ${borderClass} ${bgClass} rounded-2xl p-4">
@@ -220,9 +342,9 @@ function addMessageToUI(msg) {
         <div class="flex items-center gap-2">
           <span>${avatarIcon}</span>
           ${agentBadge}
-          <span class="text-xs text-slate-400 font-medium">${msg.role || ''}</span>
+          <span class="text-xs text-slate-400 font-medium">${escapeHTML(msg.role)}</span>
         </div>
-        <span class="text-[11px] text-slate-500 font-mono">${msg.time || ''}</span>
+        <span class="text-[11px] text-slate-500 font-mono">${escapeHTML(msg.time)}</span>
       </div>
       <div class="chat-markdown text-slate-200">
         ${parsedMarkdown}
@@ -264,22 +386,23 @@ function renderKanban() {
       ? `<span class="px-2 py-0.5 rounded text-[10px] bg-blue-950 text-blue-400 border border-blue-800 font-semibold">⚡ Antigravity</span>`
       : `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold">🟩 Codex</span>`;
 
-    const statusBadge = statusMap[task.status] || statusMap.pending;
+    const status = Object.hasOwn(statusMap, task.status) ? task.status : 'pending';
+    const statusBadge = statusMap[status];
 
     const filesBadges = (task.files || []).map(f => 
-      `<span class="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 font-mono text-[10px] border border-slate-800">📄 ${f}</span>`
+      `<span class="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 font-mono text-[10px] border border-slate-800">📄 ${escapeHTML(f)}</span>`
     ).join(' ');
 
     return `
-      <div class="kanban-card status-${task.status}">
+      <div class="kanban-card status-${status}">
         <div class="flex items-center justify-between mb-2">
           ${agentPill}
           <span class="px-2 py-0.5 rounded text-[10px] border ${statusBadge.color} font-medium">
             ${statusBadge.label}
           </span>
         </div>
-        <h4 class="font-semibold text-xs text-slate-100 mb-1">${task.title}</h4>
-        <p class="text-[11px] text-slate-400 leading-normal mb-2">${task.description || ''}</p>
+        <h4 class="font-semibold text-xs text-slate-100 mb-1">${escapeHTML(task.title)}</h4>
+        <p class="text-[11px] text-slate-400 leading-normal mb-2">${escapeHTML(task.description)}</p>
         <div class="flex flex-wrap gap-1 mt-auto">
           ${filesBadges}
         </div>
@@ -289,7 +412,7 @@ function renderKanban() {
 }
 
 // Render File Tree
-function renderFileTree(tree, depth = 0) {
+function renderFileTree(tree) {
   let count = 0;
   function countFiles(items) {
     items.forEach(i => {
@@ -312,7 +435,7 @@ function renderFileTree(tree, depth = 0) {
         return `
           <div>
             <div class="file-item font-semibold text-slate-300" style="padding-left: ${paddingLeft}">
-              📁 ${item.name}
+              📁 ${escapeHTML(item.name)}
             </div>
             ${item.children ? renderNodes(item.children, indent + 1) : ''}
           </div>
@@ -320,8 +443,8 @@ function renderFileTree(tree, depth = 0) {
       } else {
         const isSelected = selectedFile === item.path;
         return `
-          <div class="file-item ${isSelected ? 'selected' : ''}" style="padding-left: ${paddingLeft}" onclick="loadFile('${item.path}')">
-            📄 ${item.name}
+          <div class="file-item ${isSelected ? 'selected' : ''}" style="padding-left: ${paddingLeft}" data-path="${escapeHTML(item.path)}">
+            📄 ${escapeHTML(item.name)}
           </div>
         `;
       }
@@ -336,6 +459,11 @@ function renderFileTree(tree, depth = 0) {
     if (firstFile) loadFile(firstFile.path);
   }
 }
+
+fileTreeContainer.addEventListener('click', (event) => {
+  const file = event.target.closest('[data-path]');
+  if (file) loadFile(file.dataset.path);
+});
 
 function findFirstFile(items) {
   for (const item of items) {
@@ -353,8 +481,13 @@ window.loadFile = async function(relativePath) {
   selectedFile = relativePath;
   currentFileLabel.textContent = relativePath;
   document.querySelectorAll('.file-item').forEach(el => {
-    el.classList.toggle('selected', el.textContent.includes(relativePath.split('/').pop()));
+    el.classList.toggle('selected', el.dataset.path === relativePath);
   });
+
+  if (/\.pdf$/i.test(relativePath)) {
+    codeBlock.textContent = 'PDF 원본 파일입니다. 같은 폴더의 .txt 파일에서 두 에이전트가 읽는 추출 텍스트를 확인하세요.';
+    return;
+  }
 
   try {
     const res = await fetch(`/api/file?path=${encodeURIComponent(relativePath)}`);
@@ -398,6 +531,9 @@ function appendLog(log) {
   }
 
   const text = log.text || log.message || '';
+  if (text && (log.type === 'step' || log.agent || log.type === 'error')) {
+    activityPreview.textContent = text.slice(-1200);
+  }
   line.className = `leading-relaxed break-all ${color}`;
   line.textContent = `${log.time || ''} ${prefix} ${text}`;
   terminalLogsContainer.appendChild(line);
@@ -416,28 +552,54 @@ btnStart.addEventListener('click', async () => {
     promptInput.focus();
     return;
   }
+  const files = [...pdfInput.files];
+  if (activeProjectName && files.length) {
+    alert('후속 수정에서는 기존 프로젝트의 참고 PDF를 사용합니다. 새 PDF는 새 프로젝트에서 업로드하세요.');
+    return;
+  }
+  if (files.length > 3 || files.some(file => !/\.pdf$/i.test(file.name) || file.size > 10 * 1024 * 1024) ||
+      files.reduce((total, file) => total + file.size, 0) > 20 * 1024 * 1024) {
+    alert('PDF는 최대 3개, 각 10MB, 전체 20MB까지 선택할 수 있습니다.');
+    return;
+  }
+  if (files.length && runMode.value === 'sim') {
+    alert('PDF 분석은 실제 CLI 실행 모드에서만 지원합니다.');
+    return;
+  }
 
   btnStart.classList.add('hidden');
   btnAbort.classList.remove('hidden');
 
-  // Clear previous chat & logs if starting fresh
-  messagesContainer.innerHTML = '';
-  terminalLogsContainer.innerHTML = '';
-  messages = [];
+  if (!activeProjectName) {
+    messagesContainer.replaceChildren();
+    terminalLogsContainer.replaceChildren();
+    messages = [];
+    messageCount.textContent = '0 건';
+  }
 
   try {
-    const res = await fetch('/api/sprint/start', {
+    const pdfs = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name, data: String(reader.result).split(',')[1] });
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    })));
+    const url = activeProjectName
+      ? `/api/projects/${encodeURIComponent(activeProjectName)}/continue`
+      : '/api/sprint/start';
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify(activeProjectName ? { prompt } : {
         prompt,
         projectName: 'duo_' + Date.now().toString().slice(-4),
         mode: sprintMode.value,
-        runMode: runMode.value
+        runMode: runMode.value,
+        pdfs
       })
     });
     const result = await res.json();
-    if (!result.success) {
+    if (!res.ok || !result.success) {
       alert(result.error || '시작 중 오류가 발생했습니다.');
       btnStart.classList.remove('hidden');
       btnAbort.classList.add('hidden');

@@ -2,15 +2,19 @@
   "name": "dual-agent-studio",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "node --test test/core.test.js test/pdf.test.js test/server.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1",
-    "ws": "^8.22.0"
+    "pdfjs-dist": "^6.4.299"
   }
 }
