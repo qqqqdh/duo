@@ -6,9 +6,18 @@ const projectManager = require('./lib/projectManager');
 
 const app = express();
 const PORT = process.env.PORT || 3300;
+const HOST = process.env.HOST || '127.0.0.1';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api', (req, res, next) => {
+  const origin = req.get('origin');
+  if ((HOST === '127.0.0.1' && !['localhost', '127.0.0.1'].includes(req.hostname)) ||
+      (origin && origin !== `http://${req.get('host')}` && origin !== `https://${req.get('host')}`)) {
+    return res.status(403).json({ error: '허용되지 않은 출처입니다.' });
+  }
+  next();
+});
 
 // Store active SSE clients
 let sseClients = [];
@@ -57,16 +66,25 @@ app.get('/api/state', (req, res) => {
 });
 
 // API: Start sprint
-app.post('/api/sprint/start', async (req, res) => {
-  const { prompt, projectName, mode, runMode } = req.body;
-  if (!prompt || !prompt.trim()) {
+app.post('/api/sprint/start', (req, res) => {
+  const { prompt, projectName, mode, runMode } = req.body || {};
+  if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: '프롬프트를 입력해주세요.' });
+  }
+  if (orchestrator.isRunning) {
+    return res.status(409).json({ error: '이미 스프린트가 실행 중입니다.' });
+  }
+  if (mode && !['full', 'debate_only'].includes(mode)) {
+    return res.status(400).json({ error: '지원하지 않는 스프린트 모드입니다.' });
+  }
+  if (runMode && !['cli', 'sim'].includes(runMode)) {
+    return res.status(400).json({ error: '지원하지 않는 실행 모드입니다.' });
   }
 
   // Trigger sprint in background
   orchestrator.startSprint({
     prompt: prompt.trim(),
-    projectName: projectName || 'duo_app',
+    projectName: typeof projectName === 'string' ? projectName : 'duo_app',
     mode: mode || 'full',
     runMode: runMode || 'cli'
   });
@@ -94,7 +112,7 @@ app.get('/api/file', (req, res) => {
     }
     res.json({ path: relativePath, content });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -117,9 +135,13 @@ app.get('/api/projects', (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`===============================================`);
-  console.log(`🚀 DuoDev Studio (Antigravity ✕ Codex) Running!`);
-  console.log(`🌐 Local URL: http://localhost:${PORT}`);
-  console.log(`===============================================`);
-});
+if (require.main === module) {
+  app.listen(PORT, HOST, () => {
+    console.log(`===============================================`);
+    console.log(`🚀 DuoDev Studio (Antigravity ✕ Codex) Running!`);
+    console.log(`🌐 Local URL: http://${HOST}:${PORT}`);
+    console.log(`===============================================`);
+  });
+}
+
+module.exports = app;

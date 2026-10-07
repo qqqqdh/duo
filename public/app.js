@@ -31,6 +31,11 @@ const statusAgy = document.getElementById('status-agy');
 const statusCodex = document.getElementById('status-codex');
 const btnCopyCode = document.getElementById('btn-copy-code');
 const btnClearLogs = document.getElementById('btn-clear-logs');
+const escapeHTML = (value) => {
+  const span = document.createElement('span');
+  span.textContent = String(value ?? '');
+  return span.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+};
 
 // Preset buttons
 document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -58,6 +63,11 @@ function connectSSE() {
 
   evtSource.addEventListener('init', (e) => {
     const data = JSON.parse(e.data);
+    messagesContainer.innerHTML = '';
+    messages = [];
+    messageCount.textContent = '0 건';
+    terminalLogsContainer.innerHTML = '';
+    (data.logs || []).forEach(appendLog);
     if (data.session) updateSession(data.session);
     if (data.history && data.history.length > 0) {
       data.history.forEach(m => addMessageToUI(m));
@@ -115,12 +125,19 @@ function connectSSE() {
 
 // Update Session & UI State
 function updateSession(session) {
+  if (currentSession?.id !== session?.id) {
+    selectedFile = null;
+    codeBlock.textContent = '// 파일 내용을 선택하면 여기에 표시됩니다.';
+    currentFileLabel.textContent = '파일을 선택하여 코드를 열람하세요';
+  }
   currentSession = session;
   if (!session) return;
 
   currentFolderLabel.textContent = session.projectName || '준비 완료';
   progressBarFill.style.width = `${session.progress || 0}%`;
   progressPercent.textContent = `${session.progress || 0}%`;
+  btnStart.classList.toggle('hidden', !['completed', 'aborted', 'error'].includes(session.status));
+  btnAbort.classList.toggle('hidden', ['completed', 'aborted', 'error'].includes(session.status));
 
   // Update step indicators
   const phaseOrder = ['planning', 'debating', 'coding', 'reviewing', 'completed'];
@@ -212,7 +229,7 @@ function addMessageToUI(msg) {
     avatarIcon = '⚡';
   }
 
-  const parsedMarkdown = marked.parse(msg.text || '');
+  const parsedMarkdown = DOMPurify.sanitize(marked.parse(msg.text || ''));
 
   msgDiv.innerHTML = `
     <div class="border ${borderClass} ${bgClass} rounded-2xl p-4">
@@ -220,9 +237,9 @@ function addMessageToUI(msg) {
         <div class="flex items-center gap-2">
           <span>${avatarIcon}</span>
           ${agentBadge}
-          <span class="text-xs text-slate-400 font-medium">${msg.role || ''}</span>
+          <span class="text-xs text-slate-400 font-medium">${escapeHTML(msg.role)}</span>
         </div>
-        <span class="text-[11px] text-slate-500 font-mono">${msg.time || ''}</span>
+        <span class="text-[11px] text-slate-500 font-mono">${escapeHTML(msg.time)}</span>
       </div>
       <div class="chat-markdown text-slate-200">
         ${parsedMarkdown}
@@ -264,22 +281,23 @@ function renderKanban() {
       ? `<span class="px-2 py-0.5 rounded text-[10px] bg-blue-950 text-blue-400 border border-blue-800 font-semibold">⚡ Antigravity</span>`
       : `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold">🟩 Codex</span>`;
 
-    const statusBadge = statusMap[task.status] || statusMap.pending;
+    const status = Object.hasOwn(statusMap, task.status) ? task.status : 'pending';
+    const statusBadge = statusMap[status];
 
     const filesBadges = (task.files || []).map(f => 
-      `<span class="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 font-mono text-[10px] border border-slate-800">📄 ${f}</span>`
+      `<span class="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 font-mono text-[10px] border border-slate-800">📄 ${escapeHTML(f)}</span>`
     ).join(' ');
 
     return `
-      <div class="kanban-card status-${task.status}">
+      <div class="kanban-card status-${status}">
         <div class="flex items-center justify-between mb-2">
           ${agentPill}
           <span class="px-2 py-0.5 rounded text-[10px] border ${statusBadge.color} font-medium">
             ${statusBadge.label}
           </span>
         </div>
-        <h4 class="font-semibold text-xs text-slate-100 mb-1">${task.title}</h4>
-        <p class="text-[11px] text-slate-400 leading-normal mb-2">${task.description || ''}</p>
+        <h4 class="font-semibold text-xs text-slate-100 mb-1">${escapeHTML(task.title)}</h4>
+        <p class="text-[11px] text-slate-400 leading-normal mb-2">${escapeHTML(task.description)}</p>
         <div class="flex flex-wrap gap-1 mt-auto">
           ${filesBadges}
         </div>
@@ -289,7 +307,7 @@ function renderKanban() {
 }
 
 // Render File Tree
-function renderFileTree(tree, depth = 0) {
+function renderFileTree(tree) {
   let count = 0;
   function countFiles(items) {
     items.forEach(i => {
@@ -312,7 +330,7 @@ function renderFileTree(tree, depth = 0) {
         return `
           <div>
             <div class="file-item font-semibold text-slate-300" style="padding-left: ${paddingLeft}">
-              📁 ${item.name}
+              📁 ${escapeHTML(item.name)}
             </div>
             ${item.children ? renderNodes(item.children, indent + 1) : ''}
           </div>
@@ -320,8 +338,8 @@ function renderFileTree(tree, depth = 0) {
       } else {
         const isSelected = selectedFile === item.path;
         return `
-          <div class="file-item ${isSelected ? 'selected' : ''}" style="padding-left: ${paddingLeft}" onclick="loadFile('${item.path}')">
-            📄 ${item.name}
+          <div class="file-item ${isSelected ? 'selected' : ''}" style="padding-left: ${paddingLeft}" data-path="${escapeHTML(item.path)}">
+            📄 ${escapeHTML(item.name)}
           </div>
         `;
       }
@@ -336,6 +354,11 @@ function renderFileTree(tree, depth = 0) {
     if (firstFile) loadFile(firstFile.path);
   }
 }
+
+fileTreeContainer.addEventListener('click', (event) => {
+  const file = event.target.closest('[data-path]');
+  if (file) loadFile(file.dataset.path);
+});
 
 function findFirstFile(items) {
   for (const item of items) {
@@ -353,7 +376,7 @@ window.loadFile = async function(relativePath) {
   selectedFile = relativePath;
   currentFileLabel.textContent = relativePath;
   document.querySelectorAll('.file-item').forEach(el => {
-    el.classList.toggle('selected', el.textContent.includes(relativePath.split('/').pop()));
+    el.classList.toggle('selected', el.dataset.path === relativePath);
   });
 
   try {

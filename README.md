@@ -28,14 +28,14 @@
 ## 🚀 빠른 시작
 
 ### 1. 웹 스튜디오 실행
-이미 백그라운드 서버가 구동 중입니다. 브라우저에서 아래 주소로 접속하세요:
-👉 **[http://localhost:3300](http://localhost:3300)**
-
-수동으로 실행하려면 터미널에서 다음 명령어를 입력하세요:
+Node.js를 설치한 뒤 저장소에서 실행하세요:
 ```bash
-cd /home/qqqqdh/dual-agent-studio
-./run.sh
+npm ci
+npm start
 ```
+브라우저에서 **[http://127.0.0.1:3300](http://127.0.0.1:3300)** 으로 접속합니다. 기본적으로 이 컴퓨터에서만 접속할 수 있습니다.
+
+실제 CLI 모드는 `agy`와 `codex` 명령이 PATH에 있어야 합니다. 다른 위치에 있다면 `AGY_BIN`과 `CODEX_BIN` 환경 변수로 실행 파일 경로를 지정하세요. CLI 없이 화면 흐름을 확인하려면 **빠른 시뮬레이션 데모**를 선택하세요. 생성 파일은 저장소의 `projects/`에 저장됩니다.
 
 ---
 
@@ -53,7 +53,7 @@ cd /home/qqqqdh/dual-agent-studio
 ## 📁 디렉터리 구조
 
 ```
-/home/qqqqdh/dual-agent-studio/
+duo/
 ├── server.js              # Express + SSE 실시간 스트리밍 서버
 ├── run.sh                 # 원클릭 실행 스크립트
 ├── lib/
